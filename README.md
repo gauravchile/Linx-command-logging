@@ -17,4 +17,7 @@ This project sets up **hourly command logging** for Linux users and optionally b
 sudo chmod +x session_record_setup.sh
 sudo ./session_record_setup.sh
 source /etc/profile.d/command_record.sh
+echo "source /etc/profile.d/command_record.sh" | sudo tee -a /etc/skel/.bashrc
+
+
 
