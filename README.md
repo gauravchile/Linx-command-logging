@@ -32,13 +32,13 @@ Linux_Command_Logger/
 1. Make the setup script executable:
 
 ```bash
-sudo chmod +x session_record_setup.sh
+sudo chmod +x session_record.sh
 ```
 
 2. Run the setup script:
 
 ```bash
-sudo ./session_record_setup.sh
+sudo ./session_record.sh
 ```
 
 3. Source the command logger script manually:
