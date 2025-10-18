@@ -47,10 +47,11 @@ sudo ./session_record.sh
 source /etc/profile.d/command_record.sh
 ```
 
-4. Add it to all new users’ shells:
+4. Add it to all new and existing users’ shells:
 
 ```bash
-echo "source /etc/profile.d/command_record.sh" | sudo tee -a /etc/skel/.bashrc
+echo "source /etc/profile.d/command_record.sh" | sudo tee -a /etc/bash.bashrc
+
 ```
 
 > 💡 Tip: This ensures all future users automatically log commands when they log in.
