@@ -1,82 +1,119 @@
 #!/bin/bash
-# =====================================================
-# Linux Command Logging + Remote Backup (Hourly)
-# =====================================================
+# ==========================================================
+# Universal Command Logging System (All Users)
+# Secure, per-user, per-hour command logging
+# ==========================================================
 
-LOG_DIR="/var/log/command_logs"
-PROFILE_SCRIPT="/etc/profile.d/command_record.sh"
+BASE_DIR="/var/log/command_logs"
+PROFILE_SCRIPT="/etc/profile.d/command_logging.sh"
 LOGROTATE_FILE="/etc/logrotate.d/command_logs"
+LOG_GROUP="cmdlogs"
 
-echo "=== Setting up Hourly Command Logging ==="
+echo "=== Setting up Secure Command Logging for All Users ==="
 
-# 1️⃣ Create secure log directory
-mkdir -p "$LOG_DIR"
-chmod 730 "$LOG_DIR"
-chown root:adm "$LOG_DIR"
+# ----------------------------------------------------------
+# 1. Create dedicated group for logging
+# ----------------------------------------------------------
+if ! getent group "$LOG_GROUP" >/dev/null; then
+    groupadd "$LOG_GROUP"
+    echo "[+] Group '$LOG_GROUP' created"
+else
+    echo "[i] Group '$LOG_GROUP' already exists"
+fi
 
-# 2️⃣ Install session logging in profile
+# ----------------------------------------------------------
+# 2. Create secure parent directory
+# ----------------------------------------------------------
+mkdir -p "$BASE_DIR"
+chown root:"$LOG_GROUP" "$BASE_DIR"
+chmod 2770 "$BASE_DIR"    # rwx for owner & group, sticky group
+
+echo "[+] Log root directory ready: $BASE_DIR"
+
+# ----------------------------------------------------------
+# 3. Add ALL normal users to cmdlogs group
+# ----------------------------------------------------------
+echo "[+] Adding all users to $LOG_GROUP ..."
+
+for u in $(awk -F: '$3>=1000 && $1!="nobody" {print $1}' /etc/passwd); do
+    usermod -aG "$LOG_GROUP" "$u"
+    echo "  - Added: $u"
+done
+
+# ----------------------------------------------------------
+# 4. Install improved /etc/profile.d/ logging script
+# ----------------------------------------------------------
 cat << 'EOF' > "$PROFILE_SCRIPT"
 #!/bin/bash
-# Command logging per user, per hour, no output
 
-LOG_DIR="/var/log/command_logs"
-# Determine IP or local
-if [ -n "$SSH_CLIENT" ]; then
+BASE_DIR="/var/log/command_logs"
+USER_DIR="$BASE_DIR/$USER"
+
+# Ensure per-user log directory exists
+if [[ ! -d "$USER_DIR" ]]; then
+    mkdir -p "$USER_DIR"
+    chmod 770 "$USER_DIR"
+    chown $USER:cmdlogs "$USER_DIR"
+fi
+
+# Get clean TTY name
+tty_raw=$(tty 2>/dev/null)
+tty_clean=$(basename "$tty_raw")
+
+# Handle shells without tty (cron, system)
+if [[ -z "$tty_clean" || "$tty_clean" == "not a tty" ]]; then
+    tty_clean="notty"
+fi
+
+# Detect remote / local IP
+if [[ -n "$SSH_CLIENT" ]]; then
     IP=${SSH_CLIENT%% *}
 else
     IP="local"
 fi
 
-# Function to get current hourly log file
+# Build per-hour logfile
 get_log_file() {
-    local user=$(whoami)
     local datetime=$(date +"%Y-%m-%d_%H")
-    echo "$LOG_DIR/${user}_${tty}_${datetime}.log"
+    echo "$USER_DIR/${USER}_${tty_clean}_${datetime}.log"
 }
 
-# Record every command typed
+# Log each command
 export PROMPT_COMMAND='
 CMD_LOG=$(get_log_file)
-history 1 | { read x cmd; echo "$(date +"%Y-%m-%d %H:%M:%S") | $USER | $(pwd) | '"$IP"' | $cmd" >> "$CMD_LOG"; }'
+history 1 | {
+    read _ cmd
+    echo "$(date +"%Y-%m-%d %H:%M:%S") | $USER | $(pwd) | '"$IP"' | $cmd" >> "$CMD_LOG"
+}
+'
 EOF
 
 chmod +x "$PROFILE_SCRIPT"
-source "$PROFILE_SCRIPT"
-echo "[*] Profile script installed. Logging active for new sessions."
 
-# 3️⃣ Configure log rotation (keep 7 days)
+echo "[+] Profile script installed: $PROFILE_SCRIPT"
+echo "[i] Logging becomes active for **new sessions**."
+
+# ----------------------------------------------------------
+# 5. Install logrotate configuration
+# ----------------------------------------------------------
 cat << EOF > "$LOGROTATE_FILE"
-$LOG_DIR/*.log {
+$BASE_DIR/*/*.log {
     hourly
     rotate 168
-    compress
     missingok
     notifempty
-    create 0640 root adm
+    compress
+    delaycompress
+    sharedscripts
+    create 0640 root $LOG_GROUP
 }
 EOF
 
-# 4️⃣ Remote backup configuration
-read -p "Do you want to configure remote backup? (y/n): " choice
-if [[ "$choice" == "y" ]]; then
-    read -p "Remote user: " REMOTE_USER
-    read -p "Remote server (IP or hostname): " REMOTE_SERVER
-    read -p "Remote path (e.g., /backups/command_logs): " REMOTE_PATH
-
-    # Generate SSH key if not exist
-    [ ! -f /root/.ssh/id_ed25519 ] && ssh-keygen -t ed25519 -N "" -f /root/.ssh/id_ed25519
-
-    echo "[*] Copying SSH key to remote server..."
-    ssh-copy-id "${REMOTE_USER}@${REMOTE_SERVER}"
-
-    # Add cron job for hourly sync
-    CRON_JOB="0 * * * * rsync -az --remove-source-files $LOG_DIR/ ${REMOTE_USER}@${REMOTE_SERVER}:${REMOTE_PATH}/"
-    (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
-    echo "[*] Cron job added: Hourly sync to remote server."
-fi
+echo "[+] Logrotate installed: $LOGROTATE_FILE"
 
 echo "=== Setup Complete ==="
-echo "Logs format:"
-echo "2025-09-26 15:30:12 | gaurav | /home/gaurav | 192.168.1.50 | ls -la"
-echo "Logs directory: $LOG_DIR"
-source "$PROFILE_SCRIPT"
+echo "Logs will appear in: /var/log/command_logs/<user>/"
+echo "File format: <user>_<tty>_<YYYY-MM-DD_HH>.log"
+echo "Example:"
+echo "vagrant_pts0_2025-11-09_19.log"
+
