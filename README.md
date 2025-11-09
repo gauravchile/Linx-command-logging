@@ -1,4 +1,4 @@
-# 📝 Linux Command Logger + Remote Backup
+# 📝 Linux Command Logger
 
 Automates **hourly command logging** for Linux users and optionally backs up logs to a remote server.  
 Logs **typed commands only** (not output) with user, timestamp, current directory, TTY/IP, and command details.
@@ -21,8 +21,8 @@ Logs **typed commands only** (not output) with user, timestamp, current director
 Linux_Command_Logger/
 │
 ├─ README.md                     # Project documentation
-├─ session_record_setup.sh        # Setup and configuration script
-└─ /etc/profile.d/command_record.sh  # Script sourced by users' shells
+├─ session_record.sh        # Setup and configuration script
+└─ /etc/profile.d/command_logging.sh  # Script sourced by users' shells
 ```
 
 ---
@@ -44,24 +44,17 @@ sudo ./session_record.sh
 3. Source the command logger script manually:
 
 ```bash
-source /etc/profile.d/command_record.sh
+source /etc/profile.d/command_logging.sh
 ```
 
 4. Add it to all new and existing users’ shells:
 
 ```bash
-echo "source /etc/profile.d/command_record.sh" | sudo tee -a /etc/bash.bashrc
+echo "source /etc/profile.d/logging.sh" | sudo tee -a /etc/bash.bashrc
 
 ```
 
 > 💡 Tip: This ensures all future users automatically log commands when they log in.
-
----
-
-## 🔧 Optional: Remote Backup
-
-1. Configure remote server details in the setup script.  
-2. Logs will be automatically synced via `rsync` at the configured interval.  
 
 ---
 
